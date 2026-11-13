@@ -5,16 +5,22 @@ const CATS = [
   { id: 'c', n: 'Cultura pop', c: 'var(--c3)', e: '🎸' },
   { id: 'd', n: 'Deporte', c: 'var(--c4)', e: '⚽' },
 ];
+const NIVELES = [
+  { n: 'Turista', e: '🧳', d: 'Lo que sabe cualquiera que pasó por acá.', x: 1, rival: .6, premio: 50 },
+  { n: 'Local', e: '🧉', d: 'Para los que se criaron con esto.', x: 1.5, rival: .55, premio: 75 },
+  { n: 'Sabiondo', e: '🧠', d: 'Datos finos, para lucirse en la sobremesa.', x: 2, rival: .45, premio: 100 },
+];
+const NIVELES_DIA = [1, 1, 2, 2, 3];   // la ronda del día va de menor a mayor
 const META = 10;           // cartas para ganar una partida
-const TURNOS_DIA = 5;      // cartas de la ronda del día
+const TURNOS_DIA = NIVELES_DIA.length;
 const TIEMPO = 20;         // segundos por pregunta
-const PUNTERIA_RIVAL = .55;
 const COSTO = { mitad: 30, tiempo: 20 };
 
 const $ = s => document.querySelector(s);
 const app = $('#app');
 const azar = n => Math.floor(Math.random() * n);
-const porCat = CATS.map(k => PREGUNTAS.filter(p => p.cat === k.id));
+// MAZO[categoría][nivel - 1] = preguntas
+const MAZO = CATS.map(k => NIVELES.map((_, i) => PREGUNTAS.filter(p => p.cat === k.id && p.niv === i + 1)));
 
 // ---------- Lo que se guarda en el celular ----------
 const E = Object.assign({ monedas: 100, racha: 0, ultima: '', dia: null, jugadas: 0, ganadas: 0, vistas: [], tema: 'claro' }, leer());
@@ -34,10 +40,11 @@ function semilla(txt) {
 // Mismo dado y mismas cartas para todo el país: sale todo de la fecha.
 function planDelDia(fecha) {
   const r = semilla('datazo-' + fecha), usadas = new Set();
-  return Array.from({ length: TURNOS_DIA }, () => ({
+  return NIVELES_DIA.map(niv => ({
+    niv,
     dado: 1 + Math.floor(r() * 6),
     catSorpresa: Math.floor(r() * 4),
-    porCat: porCat.map(lista => { let p; do p = lista[Math.floor(r() * lista.length)]; while (usadas.has(p.id)); usadas.add(p.id); return p; }),
+    porCat: MAZO.map(m => { const lista = m[niv - 1]; let p; do p = lista[Math.floor(r() * lista.length)]; while (usadas.has(p.id)); usadas.add(p.id); return p; }),
   }));
 }
 
@@ -60,7 +67,7 @@ function inicio() {
   const ronda = d && d.fin
     ? `<h3>☀️ Ronda del día · ${lindo(f)}</h3><div class="puntos-dia">${d.puntos} puntos</div><div class="cuadros">${cuadros(d.marcas)}</div>
        <p>Volvé mañana: hay ronda nueva a la medianoche.</p><button class="boton" id="compartir">Compartir mi resultado</button>`
-    : `<h3>☀️ Ronda del día · ${lindo(f)}</h3><p>${TURNOS_DIA} cartas, las mismas para todo el país. Cuanto más rápido respondés, más puntos.</p>
+    : `<h3>☀️ Ronda del día · ${lindo(f)}</h3><p>${TURNOS_DIA} cartas, las mismas para todo el país: arranca de Turista y termina de Sabiondo. Cuanto más rápido, más puntos.</p>
        <button class="boton" id="jugar-dia">${d ? 'Seguir la ronda' : 'Jugar ahora'}</button>`;
   app.innerHTML = `
     <div class="logo">Datazo</div><p class="lema">Tirá el dado y juntá ${META} cartas antes que nadie</p>
@@ -73,7 +80,16 @@ function inicio() {
     <div class="panel"><h3>Muy pronto</h3><p>Duelos con amigos, ranking de todo el país y mazos temáticos.</p></div>`;
   if (d && d.fin) $('#compartir').onclick = compartir;
   else $('#jugar-dia').onclick = () => empezar('dia');
-  $('#jugar-maquina').onclick = () => empezar('maquina');
+  $('#jugar-maquina').onclick = elegirNivel;
+}
+
+function elegirNivel() {
+  app.innerHTML = `<div class="logo">Datazo</div><p class="lema">¿De qué nivel querés las cartas?</p>
+    ${NIVELES.map((v, i) => `<button class="panel nivel" data-n="${i + 1}"><h3>${v.e} ${v.n}</h3><p>${v.d} Si ganás: 🪙 ${v.premio}</p></button>`).join('')}
+    <button class="panel nivel" data-n="0"><h3>🎲 Mezcla</h3><p>De todo un poco, como venga. Si ganás: 🪙 75</p></button>
+    <button class="enlace" id="salir">Volver</button>`;
+  document.querySelectorAll('.nivel').forEach(b => b.onclick = () => empezar('maquina', +b.dataset.n));
+  $('#salir').onclick = inicio;
 }
 
 async function compartir() {
@@ -84,8 +100,8 @@ async function compartir() {
 // ---------- Partida ----------
 let P = null, fase = '', reloj = null, restante = 0, actual = null;
 
-function empezar(modo) {
-  P = { modo, turno: 0, yo: 0, rival: 0, puntos: 0, marcas: [], doble: false };
+function empezar(modo, nivel = 0) {
+  P = { modo, nivel, turno: 0, yo: 0, rival: 0, puntos: 0, marcas: [], doble: false };
   if (modo === 'dia') {
     const f = hoy();
     if (!E.dia || E.dia.fecha !== f) E.dia = { fecha: f, puntos: 0, marcas: [], fin: false };
@@ -162,7 +178,7 @@ function resolver(v) {
 }
 
 function sortear(ci) {
-  const lista = porCat[ci], libres = lista.filter(p => !E.vistas.includes(p.id));
+  const lista = MAZO[ci][(P.nivel || 1 + azar(3)) - 1], libres = lista.filter(p => !E.vistas.includes(p.id));
   const p = (libres.length ? libres : lista)[azar(libres.length || lista.length)];
   E.vistas = [...E.vistas, p.id].slice(-50);
   return p;
@@ -171,7 +187,8 @@ function preguntar(ci) {
   const k = CATS[ci];
   actual = P.modo === 'dia' ? P.plan[P.turno].porCat[ci] : sortear(ci);
   const ops = actual.o.map((t, i) => ({ t, ok: i === 0 })).sort(() => Math.random() - .5);
-  pintarCarta(`<span class="cat">${k.n}${P.doble ? ' · vale doble' : ''}</span><p class="pregunta">${actual.q}</p>
+  const niv = NIVELES[actual.niv - 1];
+  pintarCarta(`<div class="chips"><span class="cat">${k.n}${P.doble ? ' · vale doble' : ''}</span><span class="niv">${niv.e} ${niv.n}</span></div><p class="pregunta">${actual.q}</p>
     <div class="ops">${ops.map(o => `<button data-ok="${o.ok ? 1 : ''}">${o.t}</button>`).join('')}</div>
     <div class="reloj"><b id="arena"></b></div><div id="pie"></div>`, k.c);
   document.querySelectorAll('.ops button').forEach(b => b.onclick = () => responder(b));
@@ -193,7 +210,7 @@ function responder(b) {
   if (b && !ok) b.classList.add('mal');
   let texto;
   if (P.modo === 'dia') {
-    const pts = ok ? (100 + Math.round(100 * Math.max(0, restante) / TIEMPO)) * (P.doble ? 2 : 1) : 0;
+    const pts = ok ? Math.round((100 + 100 * Math.max(0, Math.min(TIEMPO, restante)) / TIEMPO) * NIVELES[actual.niv - 1].x) * (P.doble ? 2 : 1) : 0;
     P.puntos += pts; P.marcas.push(ok ? 'bien' : 'mal');
     Object.assign(E.dia, { puntos: P.puntos, marcas: [...P.marcas] });
     texto = ok ? `¡Bien! +${pts} puntos` : b ? 'No era esa.' : 'Se acabó el tiempo.';
@@ -223,7 +240,7 @@ function turnoRival() {
     let texto;
     if (v === 6 && P.yo > 0) { P.yo--; P.rival++; texto = 'Sacó carta sorpresa y te robó una carta.'; }
     else {
-      const k = CATS[v <= 4 ? v - 1 : azar(4)], doble = v === 6, acierta = Math.random() < PUNTERIA_RIVAL;
+      const k = CATS[v <= 4 ? v - 1 : azar(4)], doble = v === 6, acierta = Math.random() < (P.nivel ? NIVELES[P.nivel - 1].rival : .55);
       if (acierta) P.rival = Math.min(META, P.rival + (doble ? 2 : 1));
       texto = `Le tocó ${k.n}${doble ? ' (vale doble)' : ''} y ${acierta ? 'acertó' : 'falló'}.`;
     }
@@ -245,17 +262,17 @@ function fin() {
       <p>🔥 Racha: ${E.racha} ${E.racha === 1 ? 'día' : 'días'} · 🪙 +20 por jugar hoy</p>
       <button class="boton" id="compartir">Compartir mi resultado</button></div>`;
   } else {
-    const gane = P.yo >= META;
-    E.jugadas++; if (gane) { E.ganadas++; E.monedas += 50; }
+    const gane = P.yo >= META, premio = P.nivel ? NIVELES[P.nivel - 1].premio : 75, nivel = P.nivel;
+    E.jugadas++; if (gane) { E.ganadas++; E.monedas += premio; }
     html = `<div class="logo">Datazo</div><div class="panel destacado"><h3>${gane ? '🏆 ¡Ganaste!' : 'Ganó la máquina'}</h3>
-      <div class="puntos-dia">${P.yo} a ${P.rival}</div><p>${gane ? '🪙 +50 por la victoria' : 'Estuvo cerca. ¿Revancha?'}</p>
-      <button class="boton" id="otra">Jugar otra</button></div>`;
+      <div class="puntos-dia">${P.yo} a ${P.rival}</div><p>${gane ? '🪙 +' + premio + ' por la victoria' : 'Estuvo cerca. ¿Revancha?'}</p>
+      <button class="boton" id="otra" data-n="${nivel}">Jugar otra</button></div>`;
   }
   P = null; guardar();
   app.innerHTML = html + '<button class="boton dos" id="volver">Volver al inicio</button>';
   $('#volver').onclick = inicio;
   if ($('#compartir')) $('#compartir').onclick = compartir;
-  if ($('#otra')) $('#otra').onclick = () => empezar('maquina');
+  if ($('#otra')) $('#otra').onclick = () => empezar('maquina', +$('#otra').dataset.n);
 }
 
 // ---------- Comodines ----------
@@ -273,3 +290,4 @@ function usarTiempo() {
 
 pintarBarra();
 inicio();
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});

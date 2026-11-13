@@ -97,3 +97,10 @@ button:disabled { opacity: .45; cursor: default; }
 
 .comodines { display: flex; gap: 8px; }
 .comodines button { flex: 1; padding: 8px 4px; border-radius: 14px; border: 3px solid var(--trazo); background: var(--panel); font-size: 13px; font-weight: 700; line-height: 1.3; }
+
+/* Niveles */
+.chips { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.chips .cat { margin-top: 0; }
+.niv { font-size: 13px; font-weight: 800; color: #5B6787; }
+button.nivel { text-align: left; width: 100%; color: var(--tinta); transition: transform .08s, box-shadow .08s; }
+button.nivel:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--trazo); }
