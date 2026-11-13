@@ -1,0 +1,1 @@
+{"name":"Datazo","short_name":"Datazo","description":"Trivia argentina de cartas: tirá el dado y juntá 10 cartas antes que nadie.","lang":"es-AR","start_url":"./","scope":"./","display":"standalone","orientation":"portrait","background_color":"#FFF6E5","theme_color":"#4FB3E8","icons":[{"src":"icono.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]}
